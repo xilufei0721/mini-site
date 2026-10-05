@@ -1,0 +1,1751 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>wc的学习小站</title>
+    <!-- 引入 Chart.js 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        /* ==================== 基础样式 ==================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 15px;
+        }
+
+        /* ==================== 横屏时钟模式 ==================== */
+        .fullscreen-timer {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            z-index: 9999;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        .fullscreen-timer.active {
+            display: flex;
+        }
+
+        .fullscreen-timer .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            padding: 15px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        .timer-box-container {
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .timer-box {
+            background: #2a2a2a;
+            padding: 40px 80px;
+            border-radius: 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .timer-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .flip-container {
+            display: flex;
+            gap: 10px;
+            position: relative;
+        }
+
+        .flip-unit {
+            position: relative;
+            width: 120px;
+            height: 160px;
+        }
+
+        .flip-card {
+            position: absolute;
+            width: 100%;
+            height: 50%;
+            overflow: hidden;
+            backface-visibility: hidden;
+        }
+
+        .flip-card-top {
+            top: 0;
+            border-radius: 15px 15px 0 0;
+            background: #1a1a1a;
+            border-bottom: 1px solid #000;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .flip-card-top .digit {
+            font-family: 'Arial', sans-serif;
+            font-size: 100px;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+            transform: translateY(50%);
+        }
+
+        .flip-card-bottom {
+            bottom: 0;
+            border-radius: 0 0 15px 15px;
+            background: #1a1a1a;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .flip-card-bottom .digit {
+            font-family: 'Arial', sans-serif;
+            font-size: 100px;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+            transform: translateY(-50%);
+        }
+
+        .flip-card-bottom.flipping {
+            animation: flipBottomSingle 0.3s ease-in-out forwards;
+        }
+
+        @keyframes flipBottomSingle {
+            0% { transform: translateY(-50%) rotateX(0deg); }
+            50% { transform: translateY(-50%) rotateX(-90deg); }
+            51% { transform: translateY(-50%) rotateX(90deg); }
+            100% { transform: translateY(-50%) rotateX(0deg); }
+        }
+
+        .flip-card-top {
+            transition: transform 0.15s ease-out;
+        }
+
+        .flip-card-top.flipping {
+            animation: flipTopSingle 0.15s ease-out forwards;
+        }
+
+        @keyframes flipTopSingle {
+            0% { transform: translateY(50%); }
+            100% { transform: translateY(50%) rotateX(-90deg); }
+        }
+
+        .flip-separator {
+            font-family: 'Arial', sans-serif;
+            font-size: 100px;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+            margin: 0 5px;
+        }
+
+        .flip-card::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            height: 2px;
+            background: #000;
+            z-index: 5;
+        }
+
+        .big-mode {
+            font-size: 2rem;
+            margin-top: 30px;
+            opacity: 0.8;
+        }
+
+        .big-controls {
+            margin-top: 50px;
+            display: flex;
+            gap: 20px;
+        }
+
+        .big-btn {
+            padding: 20px 50px;
+            font-size: 1.5rem;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
+        .big-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .big-btn.btn-play {
+            background: #00b09b;
+            color: white;
+        }
+
+        .big-btn.btn-pause {
+            background: #f5576c;
+            color: white;
+        }
+
+        .big-btn.btn-reset {
+            background: #333;
+            color: white;
+        }
+
+        .big-btn.btn-end {
+            background: #6c757d;
+            color: white;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 25px;
+            padding: 20px 10px;
+        }
+
+        .header-content {
+            display: inline-block;
+            text-align: center;
+        }
+
+        .header-line1 {
+            font-size: 1.2rem;
+            font-weight: 300;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.85);
+            margin-bottom: 8px;
+        }
+
+        .header-line2 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 8px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .header-subtitle {
+            font-size: 0.95rem;
+            opacity: 0.8;
+            letter-spacing: 2px;
+        }
+
+        .nav-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            padding-bottom: 5px;
+        }
+
+        .nav-tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .nav-tab {
+            padding: 10px 18px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            border-radius: 20px;
+            color: white;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .nav-tab:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .nav-tab.active {
+            background: white;
+            color: #667eea;
+        }
+
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .content-section {
+            display: none;
+        }
+
+        .content-section.active {
+            display: block;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            transition: transform 0.3s ease;
+            width: 100%;
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+        }
+
+        .card-title {
+            font-size: 1.4rem;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title span {
+            font-size: 1.8rem;
+        }
+
+        .chart-card {
+            grid-column: 1 / -1;
+        }
+
+        /* 无今日数据时，统计卡片收起变小 */
+        .chart-card.no-data {
+            padding: 16px 20px;
+        }
+
+        .chart-card.no-data .chart-container {
+            gap: 0;
+            justify-content: flex-start;
+        }
+
+        .chart-card.no-data .pie-wrapper {
+            display: none;
+        }
+
+        .chart-card.no-data .chart-legend {
+            min-width: 0;
+            width: 100%;
+        }
+
+        .chart-card.no-data .total-time {
+            display: none;
+        }
+
+        .chart-card.no-data .empty-state {
+            padding: 10px;
+        }
+
+        .chart-card.no-data .empty-state span {
+            font-size: 1.8rem;
+            margin-bottom: 4px;
+        }
+
+        .chart-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pie-wrapper {
+            width: 300px;
+            height: 300px;
+            position: relative;
+        }
+
+        .chart-legend {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 200px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 5px;
+            flex-shrink: 0;
+        }
+
+        .legend-text {
+            flex: 1;
+            font-size: 0.95rem;
+            color: #333;
+        }
+
+        .legend-value {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .total-time {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            border-radius: 15px;
+            margin-top: 20px;
+        }
+
+        .total-time .number {
+            font-size: 3rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .total-time .label {
+            font-size: 1rem;
+            color: #666;
+        }
+
+        .calendar-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .calendar-nav button {
+            background: #f0f0f0;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.2rem;
+            transition: background 0.3s;
+        }
+
+        .calendar-nav button:hover {
+            background: #e0e0e0;
+        }
+
+        .calendar-nav .current-month {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+        }
+
+        .calendar-header {
+            text-align: center;
+            font-weight: 600;
+            color: #666;
+            padding: 10px 0;
+        }
+
+        .calendar-day {
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+            position: relative;
+        }
+
+        .calendar-day:hover {
+            background: #f0f0f0;
+        }
+
+        .calendar-day.other-month {
+            color: #ccc;
+        }
+
+        .calendar-day.today {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .calendar-day.selected {
+            background: #e8f0fe;
+            border: 2px solid #667eea;
+        }
+
+        .calendar-day .day-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ff6b6b;
+            position: absolute;
+            bottom: 5px;
+        }
+
+        .calendar-day .study-dot {
+            background: #667eea;
+        }
+
+        .calendar-day .memo-dot {
+            background: #f5576c;
+        }
+
+        .calendar-detail {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px dashed #e0e0e0;
+        }
+
+        .calendar-detail h4 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .detail-item {
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .detail-item.memo {
+            border-left-color: #f5576c;
+        }
+
+        .study-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .study-form input, .study-form select {
+            flex: 1;
+            min-width: 120px;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .study-form input:focus, .study-form select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: #ff6b6b;
+            color: white;
+            padding: 8px 15px;
+            font-size: 0.9rem;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .study-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .study-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .study-item .content {
+            flex: 1;
+        }
+
+        .study-item .subject {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .study-item .time {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .study-item .delete-btn {
+            background: none;
+            border: none;
+            color: #ff6b6b;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 5px 10px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        .study-item .delete-btn:hover {
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .timer-display {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .timer-time {
+            font-family: 'Arial', sans-serif;
+            font-size: 5rem;
+            font-weight: 100;
+            color: #667eea;
+            letter-spacing: 8px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
+        .timer-time:hover {
+            transform: scale(1.02);
+        }
+
+        .timer-mode {
+            font-size: 1.2rem;
+            color: #764ba2;
+            margin-top: 10px;
+            font-weight: 600;
+        }
+
+        .timer-controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 25px;
+            flex-wrap: wrap;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+            color: white;
+        }
+
+        .btn-start:hover {
+            box-shadow: 0 5px 20px rgba(0, 176, 155, 0.4);
+        }
+
+        .btn-pause {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn-reset {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-end {
+            background: linear-gradient(135deg, #adb5bd 0%, #6c757d 100%);
+            color: white;
+        }
+
+        .btn-end:hover {
+            box-shadow: 0 5px 20px rgba(108, 117, 125, 0.4);
+        }
+
+        .btn-fullscreen {
+            background: #333;
+            color: white;
+        }
+
+        .timer-presets {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .preset-btn {
+            padding: 8px 15px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+        }
+
+        .preset-btn:hover, .preset-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .custom-timer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .custom-timer input {
+            width: 80px;
+            padding: 10px;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 1rem;
+        }
+
+        .custom-timer span {
+            color: #666;
+            font-size: 1rem;
+        }
+
+        .memo-input-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .memo-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+        }
+
+        .memo-input:focus {
+            outline: none;
+            border-color: #764ba2;
+        }
+
+        .memo-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .memo-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: all 0.3s;
+        }
+
+        .memo-item.completed {
+            background: #e8f5e9;
+            text-decoration: line-through;
+            opacity: 0.7;
+        }
+
+        .memo-item .checkbox {
+            width: 22px;
+            height: 22px;
+            border: 2px solid #667eea;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        .memo-item.completed .checkbox {
+            background: #667eea;
+        }
+
+        .memo-item.completed .checkbox::after {
+            content: '✓';
+            color: white;
+            font-size: 14px;
+        }
+
+        .memo-item .memo-text {
+            flex: 1;
+            color: #333;
+        }
+
+        .memo-item .memo-date {
+            font-size: 0.8rem;
+            color: #999;
+        }
+
+        .memo-item .delete-btn {
+            background: none;
+            border: none;
+            color: #ff6b6b;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 5px 10px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        .memo-item .delete-btn:hover {
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            text-align: center;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            border-radius: 15px;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .empty-state span {
+            font-size: 3rem;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .header { padding: 12px 8px; margin-bottom: 12px; }
+            .header-line1 { font-size: 0.85rem; letter-spacing: 4px; margin-bottom: 5px; }
+            .header-line2 { font-size: 1.4rem; margin-bottom: 8px; }
+            .header-subtitle { font-size: 0.75rem; }
+            .nav-tabs { gap: 6px; margin-bottom: 15px; padding-bottom: 8px; }
+            .nav-tab { padding: 8px 14px; font-size: 0.85rem; border-radius: 15px; }
+            .card { padding: 15px; border-radius: 12px; margin-bottom: 0; }
+            .container { gap: 15px; }
+            .chart-container { flex-direction: column; gap: 20px; }
+            .pie-wrapper { width: 200px; height: 200px; }
+            .chart-legend { width: 100%; gap: 8px; }
+            .total-time .number { font-size: 2rem; }
+            .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+            .stat-box { padding: 12px 8px; }
+            .stat-number { font-size: 1.4rem; }
+            .stat-label { font-size: 0.7rem; }
+            .study-form { flex-direction: column; gap: 10px; }
+            .study-form input, .study-form button { width: 100%; }
+            .timer-time { font-size: 3rem; letter-spacing: 3px; }
+            .timer-mode { font-size: 0.9rem; }
+            .timer-controls { gap: 10px; }
+            .timer-controls .btn { flex: 1; padding: 12px 15px; }
+            .preset-btn { flex: 1; min-width: calc(50% - 4px); padding: 10px 12px; font-size: 0.85rem; }
+            .memo-input-row { flex-direction: column; }
+            .memo-input { width: 100%; }
+            .calendar-grid { grid-template-columns: repeat(7, 1fr); gap: 3px; }
+            .calendar-day { width: 100%; aspect-ratio: 1; font-size: 0.8rem; }
+            .flip-unit { width: 50px; height: 75px; }
+            .flip-card-top .digit, .flip-card-bottom .digit { font-size: 45px; }
+            .flip-separator { font-size: 45px; }
+            .timer-box { padding: 15px 20px; }
+            .timer-box-container { transform: scale(0.7); }
+            .big-mode { font-size: 1.2rem; margin-top: 10px; }
+            .big-controls { margin-top: 10px; }
+            .big-btn { padding: 12px 25px; font-size: 1rem; }
+        }
+
+        @media (max-width: 360px) {
+            .nav-tab { padding: 7px 10px; font-size: 0.75rem; }
+            .card-title { font-size: 1.1rem; }
+            .timer-time { font-size: 2.5rem; }
+        }
+
+        @media (max-height: 500px) and (orientation: landscape) {
+            .fullscreen-timer { flex-direction: row; justify-content: center; align-items: center; gap: 30px; }
+            .timer-box-container { transform: scale(0.8); }
+            .big-mode { margin-top: 0; font-size: 1.5rem; }
+            .big-controls { margin-top: 0; flex-direction: column; }
+            .big-btn { padding: 15px 40px; font-size: 1.2rem; }
+            .close-btn { position: fixed; top: 10px; right: 10px; font-size: 1rem; padding: 10px 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="fullscreen-timer" id="fullscreenTimer">
+        <button class="close-btn" onclick="closeFullscreenTimer()">✕ 退出全屏</button>
+        <div class="timer-box-container">
+            <div class="timer-box">
+                <div class="flip-container">
+                    <div class="flip-unit" id="flipMinTens">
+                        <div class="flip-card flip-card-top"><span class="digit">0</span></div>
+                        <div class="flip-card flip-card-bottom"><span class="digit">0</span></div>
+                    </div>
+                    <div class="flip-unit" id="flipMinOnes">
+                        <div class="flip-card flip-card-top"><span class="digit">0</span></div>
+                        <div class="flip-card flip-card-bottom"><span class="digit">0</span></div>
+                    </div>
+                    <span class="flip-separator">:</span>
+                    <div class="flip-unit" id="flipSecTens">
+                        <div class="flip-card flip-card-top"><span class="digit">0</span></div>
+                        <div class="flip-card flip-card-bottom"><span class="digit">0</span></div>
+                    </div>
+                    <div class="flip-unit" id="flipSecOnes">
+                        <div class="flip-card flip-card-top"><span class="digit">0</span></div>
+                        <div class="flip-card flip-card-bottom"><span class="digit">0</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="big-mode" id="bigTimerMode">🌱 专注时间</div>
+        <div class="big-controls">
+            <button class="big-btn btn-play" id="bigStartBtn" onclick="toggleTimer()">▶ 开始</button>
+            <button class="big-btn btn-end" onclick="endTimer()">⏹ 结束</button>
+            <button class="big-btn btn-reset" onclick="resetTimer()">↺ 重置</button>
+        </div>
+    </div>
+
+    <header class="header">
+        <div class="header-content">
+            <h1 class="header-line1">Want To Create</h1>
+            <h2 class="header-line2">✏️ WC的学习小站</h2>
+            <p class="header-subtitle">记录每一天的成长与进步</p>
+        </div>
+    </header>
+
+    <nav class="nav-tabs">
+        <button class="nav-tab active" onclick="showSection('home')">🏠 首页</button>
+        <button class="nav-tab" onclick="showSection('calendar')">📅 日历</button>
+        <button class="nav-tab" onclick="showSection('timer')">⏱️ 计时器</button>
+        <button class="nav-tab" onclick="showSection('memos')">📌 备忘录</button>
+    </nav>
+
+    <main class="main-container">
+        <section class="content-section active" id="section-home">
+            <div class="card chart-card" id="studyChartCard">
+                <h2 class="card-title"><span>📊</span> 今日学习统计</h2>
+                <div class="chart-container">
+                    <div class="pie-wrapper"><canvas id="studyPieChart"></canvas></div>
+                    <div class="chart-legend" id="chartLegend">
+                        <div class="empty-state"><span>📈</span><p>还没有今日学习数据</p></div>
+                    </div>
+                </div>
+                <div class="total-time">
+                    <div class="number" id="todayTotalTime">0分钟</div>
+                    <div class="label">今日总学习时长</div>
+                </div>
+            </div>
+
+            <div class="container">
+                <div class="card">
+                    <h2 class="card-title"><span>📝</span> 学习记录</h2>
+                    <div class="stats-grid">
+                        <div class="stat-box"><div class="stat-number" id="totalDays">0</div><div class="stat-label">学习天数</div></div>
+                        <div class="stat-box"><div class="stat-number" id="totalHours">0</div><div class="stat-label">总学习时长</div></div>
+                        <div class="stat-box"><div class="stat-number" id="totalRecords">0</div><div class="stat-label">记录条数</div></div>
+                    </div>
+                    <div class="study-form">
+                        <input type="text" id="studySubject" placeholder="今天学了什么？（如：Python编程）">
+                        <input type="number" id="studyHours" placeholder="时长（分钟）" min="1" step="1">
+                        <button class="btn btn-primary" onclick="addStudyRecord()">记录</button>
+                    </div>
+                    <div class="study-list" id="studyList">
+                        <div class="empty-state"><span>📖</span><p>还没有学习记录<br>开始记录你的学习之旅吧！</p></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title"><span>⏱️</span> 快捷计时器</h2>
+                    <div class="timer-display">
+                        <div class="timer-time" id="homeTimerDisplay" onclick="openFullscreenTimer()">25:00</div>
+                        <div class="timer-mode" id="homeTimerMode">🌱 专注时间</div>
+                        <p style="font-size: 0.8rem; color: #999; margin-top: 10px;">点击时间可进入全屏模式</p>
+                    </div>
+                    <div class="timer-controls">
+                        <button class="btn btn-start" id="homeStartBtn" onclick="toggleHomeTimer()">▶ 开始</button>
+                        <button class="btn btn-end" onclick="endTimer()">⏹ 结束</button>
+                        <button class="btn btn-fullscreen" onclick="openFullscreenTimer()">📱 全屏</button>
+                    </div>
+                    <div class="timer-presets">
+                        <button class="preset-btn active" onclick="setHomeTimer(25, '🌱 专注时间', 'work')">25分钟</button>
+                        <button class="preset-btn" onclick="setHomeTimer(5, '☕ 短休息', 'shortBreak')">5分钟</button>
+                        <button class="preset-btn" onclick="setHomeTimer(15, '🌿 长休息', 'longBreak')">15分钟</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title"><span>📌</span> 快捷备忘录</h2>
+                    <div class="memo-input-row">
+                        <input type="text" class="memo-input" id="homeMemoInput" placeholder="添加待办事项..." onkeypress="handleHomeMemoKeypress(event)">
+                        <button class="btn btn-primary" onclick="addHomeMemo()">添加</button>
+                    </div>
+                    <div class="memo-list" id="homeMemoList">
+                        <div class="empty-state"><span>📋</span><p>没有待办事项<br>快来添加一个吧！</p></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="content-section" id="section-calendar">
+            <div class="container">
+                <div class="card">
+                    <h2 class="card-title"><span>📅</span> 日历视图</h2>
+                    <div class="calendar-nav">
+                        <button onclick="changeMonth(-1)">◀</button>
+                        <span class="current-month" id="currentMonth">2024年1月</span>
+                        <button onclick="changeMonth(1)">▶</button>
+                    </div>
+                    <div class="calendar-grid" id="calendarGrid">
+                        <div class="calendar-header">日</div>
+                        <div class="calendar-header">一</div>
+                        <div class="calendar-header">二</div>
+                        <div class="calendar-header">三</div>
+                        <div class="calendar-header">四</div>
+                        <div class="calendar-header">五</div>
+                        <div class="calendar-header">六</div>
+                    </div>
+                    <div class="calendar-detail" id="calendarDetail">
+                        <h4>📋 选择日期查看详情</h4>
+                        <p style="color: #999;">点击日历中的某一天，可以看到当天添加的学习记录和备忘录</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="content-section" id="section-timer">
+            <div class="container">
+                <div class="card">
+                    <h2 class="card-title"><span>⏱️</span> 专注计时器</h2>
+                    <div class="timer-display">
+                        <div class="timer-time" id="timerDisplay" onclick="openFullscreenTimer()">25:00</div>
+                        <div class="timer-mode" id="timerMode">🌱 专注时间</div>
+                        <p style="font-size: 0.8rem; color: #999; margin-top: 10px;">点击时间可进入全屏时钟模式</p>
+                    </div>
+                    <div class="timer-controls">
+                        <button class="btn btn-start" id="startBtn" onclick="toggleTimer()">▶ 开始</button>
+                        <button class="btn btn-reset" onclick="resetTimer()">↺ 重置</button>
+                        <button class="btn btn-fullscreen" onclick="openFullscreenTimer()">📱 全屏模式</button>
+                    </div>
+                    <h4 style="margin: 25px 0 15px; color: #666;">预设时间</h4>
+                    <div class="timer-presets">
+                        <button class="preset-btn active" onclick="setTimer(25, '🌱 专注时间', 'work')">专注25分钟</button>
+                        <button class="preset-btn" onclick="setTimer(5, '☕ 短休息', 'shortBreak')">短休息5分钟</button>
+                        <button class="preset-btn" onclick="setTimer(15, '🌿 长休息', 'longBreak')">长休息15分钟</button>
+                        <button class="preset-btn" onclick="setTimer(45, '🚀 深度工作', 'work')">深度45分钟</button>
+                    </div>
+                    <h4 style="margin: 25px 0 15px; color: #666;">自定义时长</h4>
+                    <div class="custom-timer">
+                        <input type="number" id="customMinutes" placeholder="分钟" min="1" max="180">
+                        <span>分钟</span>
+                        <button class="btn btn-success" onclick="setCustomTimer()">✓ 设置</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="content-section" id="section-memos">
+            <div class="container">
+                <div class="card">
+                    <h2 class="card-title"><span>📌</span> 备忘录</h2>
+                    <div class="memo-input-row">
+                        <input type="text" class="memo-input" id="memoInput" placeholder="添加新待办事项..." onkeypress="handleMemoKeypress(event)">
+                        <button class="btn btn-primary" onclick="addMemo()">添加</button>
+                    </div>
+                    <div class="memo-list" id="memoList">
+                        <div class="empty-state"><span>📋</span><p>没有待办事项<br>快来添加一个吧！</p></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        let timerInterval = null;
+        let remainingSeconds = 25 * 60;
+        let isRunning = false;
+        let hasStarted = false;
+        let currentMode = 'work';
+        let currentCalendarDate = new Date();
+        let selectedCalendarDay = null;
+        let studyPieChart = null;
+        let tickInterval = null;
+        let audioContext = null;
+
+        function showSection(sectionId) {
+            document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.getElementById('section-' + sectionId).classList.add('active');
+            event.target.classList.add('active');
+            if (sectionId === 'home') updateStudyChart();
+            if (sectionId === 'calendar') renderCalendar();
+        }
+
+        function loadFromStorage(key) {
+            const data = localStorage.getItem(key);
+            return data ? JSON.parse(data) : [];
+        }
+
+        function saveToStorage(key, data) {
+            localStorage.setItem(key, JSON.stringify(data));
+        }
+
+        function addStudyRecord() {
+            const subjectInput = document.getElementById('studySubject');
+            const hoursInput = document.getElementById('studyHours');
+            const subject = subjectInput.value.trim();
+            const minutes = parseInt(hoursInput.value);
+            if (!subject) { alert('请输入学习内容！'); subjectInput.focus(); return; }
+            if (isNaN(minutes) || minutes <= 0) { alert('请输入有效的学习时长（分钟）！'); hoursInput.focus(); return; }
+            const record = {
+                id: Date.now(), subject: subject, minutes: minutes,
+                date: new Date().toLocaleDateString('zh-CN'),
+                dateKey: new Date().toISOString().split('T')[0]
+            };
+            const records = loadFromStorage('studyRecords');
+            records.unshift(record);
+            saveToStorage('studyRecords', records);
+            subjectInput.value = ''; hoursInput.value = '';
+            renderStudyList(); updateStudyStats(); updateStudyChart();
+        }
+
+        function deleteStudyRecord(id) {
+            const records = loadFromStorage('studyRecords').filter(r => r.id !== id);
+            saveToStorage('studyRecords', records);
+            renderStudyList(); updateStudyStats(); updateStudyChart();
+        }
+
+        function renderStudyList() {
+            const list = document.getElementById('studyList');
+            const records = loadFromStorage('studyRecords');
+            if (records.length === 0) {
+                list.innerHTML = '<div class="empty-state"><span>📖</span><p>还没有学习记录<br>开始记录你的学习之旅吧！</p></div>';
+                return;
+            }
+            list.innerHTML = records.slice(0, 10).map(record => `
+                <div class="study-item">
+                    <div class="content">
+                        <div class="subject">${escapeHtml(record.subject)}</div>
+                        <div class="time">📅 ${record.date} | ⏱️ ${formatMinutes(record.minutes)}</div>
+                    </div>
+                    <button class="delete-btn" onclick="deleteStudyRecord(${record.id})">🗑️</button>
+                </div>
+            `).join('');
+        }
+
+        function updateStudyStats() {
+            const records = loadFromStorage('studyRecords');
+            document.getElementById('totalRecords').textContent = records.length;
+            const totalMinutes = records.reduce((sum, r) => sum + r.minutes, 0);
+            document.getElementById('totalHours').textContent = formatMinutes(totalMinutes);
+            const uniqueDates = new Set(records.map(r => r.date));
+            document.getElementById('totalDays').textContent = uniqueDates.size;
+        }
+
+        function updateStudyChart() {
+            const records = loadFromStorage('studyRecords');
+            const today = new Date().toISOString().split('T')[0];
+            const todayRecords = records.filter(r => r.dateKey === today);
+            const totalMinutes = todayRecords.reduce((sum, r) => sum + r.minutes, 0);
+            document.getElementById('todayTotalTime').textContent = formatMinutes(totalMinutes);
+            const subjectMap = {};
+            todayRecords.forEach(r => { subjectMap[r.subject] = (subjectMap[r.subject] || 0) + r.minutes; });
+            const subjects = Object.keys(subjectMap);
+            const data = Object.values(subjectMap);
+            const colors = ['#667eea','#764ba2','#f5576c','#00b09b','#96c93d','#ff9a56','#ff6b6b','#a855f7','#3b82f6','#10b981'];
+            const legendContainer = document.getElementById('chartLegend');
+            const chartCard = document.getElementById('studyChartCard');
+            if (chartCard) chartCard.classList.toggle('no-data', todayRecords.length === 0);
+            if (subjects.length === 0) {
+                legendContainer.innerHTML = '<div class="empty-state"><span>📈</span><p>还没有今日学习数据</p></div>';
+            } else {
+                legendContainer.innerHTML = subjects.map((subject, i) => `
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: ${colors[i % colors.length]}"></div>
+                        <div class="legend-text">${escapeHtml(subject)}</div>
+                        <div class="legend-value">${formatMinutes(data[i])}</div>
+                    </div>
+                `).join('');
+            }
+            if (studyPieChart) studyPieChart.destroy();
+            const ctx = document.getElementById('studyPieChart').getContext('2d');
+            studyPieChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: { labels: subjects, datasets: [{ data: data, backgroundColor: subjects.map((_, i) => colors[i % colors.length]), borderWidth: 0, hoverOffset: 10 }] },
+                options: { responsive: true, maintainAspectRatio: true, cutout: '60%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(context) { return ` ${formatMinutes(context.raw)} (${((context.raw / totalMinutes) * 100).toFixed(0)}%)`; } } } } }
+            });
+        }
+
+        function initAudio() {
+            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playTick() {
+            if (!audioContext) return;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.frequency.value = 1200;
+            oscillator.type = 'square';
+            gainNode.gain.setValueAtTime(0.05, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.03);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.03);
+        }
+
+        function playAlarm() {
+            if (!audioContext) return;
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    oscillator.frequency.value = 800;
+                    oscillator.type = 'sine';
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + 0.5);
+                }, i * 600);
+            }
+        }
+
+        function startTickSound() { if (tickInterval) return; tickInterval = setInterval(playTick, 1000); }
+        function stopTickSound() { if (tickInterval) { clearInterval(tickInterval); tickInterval = null; } }
+
+        let lastSecond = -1;
+
+        function updateFlipDisplay() {
+            const minutes = Math.floor(remainingSeconds / 60);
+            const seconds = remainingSeconds % 60;
+            updateFlipCard('flipMinTens', Math.floor(minutes / 10) % 10, false);
+            updateFlipCard('flipMinOnes', minutes % 10, seconds === 59);
+            updateFlipCard('flipSecTens', Math.floor(seconds / 10) % 10, false);
+            updateFlipCard('flipSecOnes', seconds % 10, true);
+            lastSecond = seconds;
+        }
+
+        function updateFlipCard(id, digit, animate) {
+            const unit = document.getElementById(id);
+            const topCard = unit.querySelector('.flip-card-top');
+            const bottomCard = unit.querySelector('.flip-card-bottom');
+            if (animate) {
+                if (bottomCard.querySelector('.digit').textContent === String(digit)) return;
+                topCard.classList.add('flipping');
+                topCard.querySelector('.digit').textContent = digit;
+                setTimeout(() => {
+                    topCard.classList.remove('flipping');
+                    bottomCard.classList.add('flipping');
+                    void bottomCard.offsetWidth;
+                    bottomCard.querySelector('.digit').textContent = digit;
+                }, 150);
+                setTimeout(() => { bottomCard.classList.remove('flipping'); }, 450);
+            } else {
+                topCard.querySelector('.digit').textContent = digit;
+                bottomCard.querySelector('.digit').textContent = digit;
+            }
+        }
+
+        function openFullscreenTimer() { document.getElementById('fullscreenTimer').classList.add('active'); updateFlipDisplay(); lastSecond = -1; }
+        function closeFullscreenTimer() { document.getElementById('fullscreenTimer').classList.remove('active'); }
+
+        function setTimer(minutes, modeText, modeType) {
+            isRunning = false;
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+            stopTickSound();
+            hasStarted = false;
+            remainingSeconds = minutes * 60;
+            currentMode = modeType;
+            updateTimerDisplay(); updateHomeTimerDisplay();
+            document.getElementById('timerMode').textContent = modeText;
+            document.getElementById('homeTimerMode').textContent = modeText;
+            document.querySelectorAll('#section-timer .preset-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('#section-home .preset-btn').forEach(btn => btn.classList.remove('active'));
+            if (event && event.target) event.target.classList.add('active');
+            document.getElementById('startBtn').textContent = '▶ 开始';
+            document.getElementById('startBtn').className = 'btn btn-start';
+            const homeBtn = document.getElementById('homeStartBtn');
+            if (homeBtn) { homeBtn.textContent = '▶ 开始'; homeBtn.className = 'btn btn-start'; }
+            const bigBtn = document.getElementById('bigStartBtn');
+            if (bigBtn) { bigBtn.textContent = '▶ 开始'; bigBtn.className = 'big-btn btn-play'; }
+        }
+
+        function setCustomTimer() {
+            const minutes = parseInt(document.getElementById('customMinutes').value);
+            if (isNaN(minutes) || minutes < 1 || minutes > 180) { alert('请输入1-180之间的分钟数！'); return; }
+            stopTimer();
+            remainingSeconds = minutes * 60;
+            currentMode = 'custom';
+            updateTimerDisplay();
+            document.getElementById('timerMode').textContent = `⏱️ 自定义 ${minutes} 分钟`;
+            document.getElementById('customMinutes').value = '';
+            document.querySelectorAll('#section-timer .preset-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('startBtn').textContent = '▶ 开始';
+            document.getElementById('startBtn').className = 'btn btn-start';
+        }
+
+        function toggleTimer() { initAudio(); if (isRunning) { stopTimer(); } else { startTimer(); } }
+
+        function startTimer() {
+            isRunning = true; hasStarted = true;
+            document.getElementById('startBtn').textContent = '⏸ 暂停';
+            document.getElementById('startBtn').className = 'btn btn-pause';
+            const homeBtn = document.getElementById('homeStartBtn');
+            if (homeBtn) { homeBtn.textContent = '⏸ 暂停'; homeBtn.className = 'btn btn-pause'; }
+            const bigBtn = document.getElementById('bigStartBtn');
+            if (bigBtn) { bigBtn.textContent = '⏸ 暂停'; bigBtn.className = 'big-btn btn-pause'; }
+            startTickSound();
+            timerInterval = setInterval(() => {
+                remainingSeconds--;
+                updateTimerDisplay(); updateHomeTimerDisplay();
+                if (document.getElementById('fullscreenTimer').classList.contains('active')) updateFlipDisplay();
+                if (remainingSeconds <= 0) { stopTimer(); stopTickSound(); playAlarm(); showNotification(); }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            isRunning = false;
+            const isPaused = hasStarted && remainingSeconds > 0;
+            document.getElementById('startBtn').textContent = isPaused ? '▶ 继续' : '▶ 开始';
+            document.getElementById('startBtn').className = isPaused ? 'btn btn-success' : 'btn btn-start';
+            const homeBtn = document.getElementById('homeStartBtn');
+            if (homeBtn) { homeBtn.textContent = isPaused ? '▶ 继续' : '▶ 开始'; homeBtn.className = isPaused ? 'btn btn-success' : 'btn btn-start'; }
+            const bigBtn = document.getElementById('bigStartBtn');
+            if (bigBtn) { bigBtn.textContent = isPaused ? '▶ 继续' : '▶ 开始'; bigBtn.className = 'big-btn btn-play'; }
+            stopTickSound();
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        }
+
+        function resetTimer() {
+            stopTimer(); stopTickSound();
+            hasStarted = false; remainingSeconds = 25 * 60;
+            updateTimerDisplay(); updateHomeTimerDisplay();
+            document.getElementById('startBtn').textContent = '▶ 开始';
+            document.getElementById('startBtn').className = 'btn btn-start';
+            const homeBtn = document.getElementById('homeStartBtn');
+            if (homeBtn) { homeBtn.textContent = '▶ 开始'; homeBtn.className = 'btn btn-start'; }
+            const bigBtn = document.getElementById('bigStartBtn');
+            if (bigBtn) { bigBtn.textContent = '▶ 开始'; bigBtn.className = 'big-btn btn-play'; }
+            document.getElementById('timerMode').textContent = '🌱 专注时间';
+            document.getElementById('homeTimerMode').textContent = '🌱 专注时间';
+            lastSecond = -1;
+            if (document.getElementById('fullscreenTimer').classList.contains('active')) updateFlipDisplay();
+        }
+
+        function updateTimerDisplay() {
+            const minutes = Math.floor(remainingSeconds / 60);
+            const seconds = remainingSeconds % 60;
+            document.getElementById('timerDisplay').textContent = `${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}`;
+        }
+
+        function setHomeTimer(minutes, modeText, modeType) { setTimer(minutes, modeText, modeType); updateHomeTimerDisplay(); document.getElementById('homeTimerMode').textContent = modeText; }
+        function toggleHomeTimer() { toggleTimer(); }
+
+        function endTimer() {
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+            isRunning = false; hasStarted = false;
+            stopTickSound();
+            remainingSeconds = 25 * 60; currentMode = 'work';
+            updateTimerDisplay(); updateHomeTimerDisplay();
+            document.getElementById('timerMode').textContent = '🌱 专注时间';
+            document.getElementById('homeTimerMode').textContent = '🌱 专注时间';
+            document.querySelectorAll('#section-timer .preset-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('#section-home .preset-btn').forEach(btn => btn.classList.remove('active'));
+            const homeFirstPreset = document.querySelector('#section-home .preset-btn');
+            if (homeFirstPreset) homeFirstPreset.classList.add('active');
+            const timerFirstPreset = document.querySelector('#section-timer .preset-btn');
+            if (timerFirstPreset) timerFirstPreset.classList.add('active');
+            const startBtn = document.getElementById('startBtn');
+            if (startBtn) { startBtn.textContent = '▶ 开始'; startBtn.className = 'btn btn-start'; }
+            const homeBtn = document.getElementById('homeStartBtn');
+            if (homeBtn) { homeBtn.textContent = '▶ 开始'; homeBtn.className = 'btn btn-start'; }
+            const bigBtn = document.getElementById('bigStartBtn');
+            if (bigBtn) { bigBtn.textContent = '▶ 开始'; bigBtn.className = 'big-btn btn-play'; }
+            lastSecond = -1;
+            if (document.getElementById('fullscreenTimer').classList.contains('active')) updateFlipDisplay();
+        }
+
+        function updateHomeTimerDisplay() {
+            const minutes = Math.floor(remainingSeconds / 60);
+            const seconds = remainingSeconds % 60;
+            document.getElementById('homeTimerDisplay').textContent = `${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}`;
+        }
+
+        function showNotification() {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const messages = { 'work': '🎉 专注时间结束！休息一下吧！', 'shortBreak': '☕ 休息结束！准备开始下一轮专注！', 'longBreak': '🌿 长休息结束！继续加油！', 'custom': '⏱️ 时间到！' };
+                new Notification('wc的学习小站', { body: messages[currentMode] || '时间到！', icon: '📚' });
+            } else if ('Notification' in window && Notification.permission !== 'denied') {
+                Notification.requestPermission();
+            }
+        }
+
+        function addMemo() {
+            const input = document.getElementById('memoInput');
+            const text = input.value.trim();
+            if (!text) { alert('请输入内容！'); return; }
+            const memo = { id: Date.now(), text: text, completed: false, createdAt: new Date().toLocaleDateString('zh-CN'), dateKey: new Date().toISOString().split('T')[0] };
+            const memos = loadFromStorage('memos');
+            memos.unshift(memo);
+            saveToStorage('memos', memos);
+            input.value = '';
+            renderMemos();
+        }
+
+        function addHomeMemo() {
+            const input = document.getElementById('homeMemoInput');
+            const text = input.value.trim();
+            if (!text) { alert('请输入内容！'); return; }
+            const memo = { id: Date.now(), text: text, completed: false, createdAt: new Date().toLocaleDateString('zh-CN'), dateKey: new Date().toISOString().split('T')[0] };
+            const memos = loadFromStorage('memos');
+            memos.unshift(memo);
+            saveToStorage('memos', memos);
+            input.value = '';
+            renderHomeMemos();
+        }
+
+        function handleMemoKeypress(event) { if (event.key === 'Enter') addMemo(); }
+        function handleHomeMemoKeypress(event) { if (event.key === 'Enter') addHomeMemo(); }
+
+        function toggleMemo(id) {
+            const memos = loadFromStorage('memos');
+            const memo = memos.find(m => m.id === id);
+            if (memo) { memo.completed = !memo.completed; saveToStorage('memos', memos); renderMemos(); renderHomeMemos(); }
+        }
+
+        function deleteMemo(id) {
+            saveToStorage('memos', loadFromStorage('memos').filter(m => m.id !== id));
+            renderMemos(); renderHomeMemos();
+        }
+
+        function renderMemos() {
+            const list = document.getElementById('memoList');
+            const memos = loadFromStorage('memos');
+            if (memos.length === 0) { list.innerHTML = '<div class="empty-state"><span>📋</span><p>没有待办事项<br>快来添加一个吧！</p></div>'; return; }
+            list.innerHTML = memos.map(memo => `<div class="memo-item ${memo.completed ? 'completed' : ''}"><div class="checkbox" onclick="toggleMemo(${memo.id})"></div><div class="memo-text">${escapeHtml(memo.text)}</div><button class="delete-btn" onclick="deleteMemo(${memo.id})">🗑️</button></div>`).join('');
+        }
+
+        function renderHomeMemos() {
+            const list = document.getElementById('homeMemoList');
+            const memos = loadFromStorage('memos');
+            if (memos.length === 0) { list.innerHTML = '<div class="empty-state"><span>📋</span><p>没有待办事项<br>快来添加一个吧！</p></div>'; return; }
+            list.innerHTML = memos.slice(0, 5).map(memo => `<div class="memo-item ${memo.completed ? 'completed' : ''}"><div class="checkbox" onclick="toggleMemo(${memo.id})"></div><div class="memo-text">${escapeHtml(memo.text)}</div><button class="delete-btn" onclick="deleteMemo(${memo.id})">🗑️</button></div>`).join('');
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendarGrid');
+            const year = currentCalendarDate.getFullYear();
+            const month = currentCalendarDate.getMonth();
+            document.getElementById('currentMonth').textContent = `${year}年${month + 1}月`;
+            while (grid.children.length > 7) grid.removeChild(grid.lastChild);
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const daysInPrevMonth = new Date(year, month, 0).getDate();
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            const studyRecords = loadFromStorage('studyRecords');
+            const memos = loadFromStorage('memos');
+            for (let i = firstDay - 1; i >= 0; i--) {
+                const dayEl = document.createElement('div');
+                dayEl.className = 'calendar-day other-month';
+                dayEl.textContent = daysInPrevMonth - i;
+                grid.appendChild(dayEl);
+            }
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const dayEl = document.createElement('div');
+                dayEl.className = 'calendar-day';
+                if (dateStr === todayStr) dayEl.classList.add('today');
+                if (selectedCalendarDay === dateStr) dayEl.classList.add('selected');
+                dayEl.innerHTML = `<span>${day}</span>`;
+                if (studyRecords.some(r => r.dateKey === dateStr)) { const dot = document.createElement('span'); dot.className = 'day-dot study-dot'; dayEl.appendChild(dot); }
+                if (memos.some(m => m.dateKey === dateStr)) { const dot = document.createElement('span'); dot.className = 'day-dot memo-dot'; dayEl.appendChild(dot); }
+                dayEl.onclick = () => selectCalendarDay(dateStr, dayEl);
+                grid.appendChild(dayEl);
+            }
+            const remainingCells = 42 - grid.children.length;
+            for (let day = 1; day <= remainingCells; day++) {
+                const dayEl = document.createElement('div');
+                dayEl.className = 'calendar-day other-month';
+                dayEl.textContent = day;
+                grid.appendChild(dayEl);
+            }
+        }
+
+        function changeMonth(delta) {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() + delta);
+            selectedCalendarDay = null;
+            renderCalendar();
+            document.getElementById('calendarDetail').innerHTML = '<h4>📋 选择日期查看详情</h4><p style="color: #999;">点击日历中的某一天，可以看到当天添加的学习记录和备忘录</p>';
+        }
+
+        function selectCalendarDay(dateStr, dayEl) {
+            document.querySelectorAll('.calendar-day.selected').forEach(el => el.classList.remove('selected'));
+            dayEl.classList.add('selected');
+            selectedCalendarDay = dateStr;
+            const date = new Date(dateStr);
+            const dateStrCN = date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+            const studyRecords = loadFromStorage('studyRecords').filter(r => r.dateKey === dateStr);
+            const memos = loadFromStorage('memos').filter(m => m.dateKey === dateStr);
+            let html = `<h4>📅 ${dateStrCN}</h4>`;
+            if (studyRecords.length > 0) {
+                html += '<p style="margin: 10px 0 5px; font-weight: 600; color: #667eea;">📚 学习记录</p>';
+                studyRecords.forEach(record => { html += `<div class="detail-item"><strong>${escapeHtml(record.subject)}</strong><div style="font-size: 0.85rem; color: #666; margin-top: 5px;">⏱️ ${formatMinutes(record.minutes)}</div></div>`; });
+            }
+            if (memos.length > 0) {
+                html += '<p style="margin: 15px 0 5px; font-weight: 600; color: #f5576c;">📌 备忘录</p>';
+                memos.forEach(memo => { html += `<div class="detail-item memo ${memo.completed ? 'completed' : ''}"><strong>${escapeHtml(memo.text)}</strong>${memo.completed ? '<span style="color: #28a745;"> ✓ 已完成</span>' : ''}</div>`; });
+            }
+            if (studyRecords.length === 0 && memos.length === 0) html += '<p style="color: #999; margin-top: 15px;">这天还没有记录哦～</p>';
+            document.getElementById('calendarDetail').innerHTML = html;
+        }
+
+        function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+
+        function formatMinutes(minutes) {
+            if (minutes < 60) return minutes + '分钟';
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            return mins === 0 ? hours + '小时' : hours + '小时' + mins + '分钟';
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            renderStudyList(); updateStudyStats(); updateStudyChart();
+            renderMemos(); renderHomeMemos();
+            updateTimerDisplay(); updateHomeTimerDisplay();
+        });
+    </script>
+
+<script>
+const style = document.createElement('style');
+style.textContent = `
+    body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    
+    .button-container {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+    }
+    
+    .edgeone-button {
+        display: flex;
+        align-items: center;
+        background: #000000;
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        padding: 6px 20px 6px 12px;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .edgeone-button:hover {
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+        transform: translateY(-1px);
+    }
+    
+
+    
+    .close-button {
+        position: absolute;
+        top: 2px;
+        right: 4px;
+        width: 14px;
+        height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #888888;
+        font-size: 10px;
+        cursor: pointer;
+        opacity: 1;
+        z-index: 1001;
+    }
+`;
+
+document.head.appendChild(style);
+
+const buttonContainer = document.createElement('div');
+buttonContainer.className = 'button-container';
+
+const closeButton = document.createElement('div');
+closeButton.className = 'close-button';
+closeButton.textContent = '×';
+
+const edgeoneButton = document.createElement('button');
+edgeoneButton.className = 'edgeone-button';
+
+// 创建带有不同颜色的文本
+const useText = document.createElement('span');
+useText.textContent = '使用 ';
+useText.style.color = '#888888';
+
+const pageText = document.createElement('span');
+pageText.textContent = 'Pages';
+pageText.style.color = '#ffffff';
+pageText.style.marginLeft = '2px';
+pageText.style.marginRight = '2px';
+
+const deployText = document.createElement('span');
+deployText.textContent = ' 部署';
+deployText.style.color = '#888888';
+
+edgeoneButton.appendChild(useText);
+edgeoneButton.appendChild(pageText);
+edgeoneButton.appendChild(deployText);
+
+buttonContainer.appendChild(closeButton);
+buttonContainer.appendChild(edgeoneButton);
+
+document.body.appendChild(buttonContainer);
+
+closeButton.addEventListener('click', function (e) {
+  e.stopPropagation();
+  buttonContainer.style.display = 'none';
+});
+
+edgeoneButton.addEventListener('click', function () {
+  window.open('https://pages.edgeone.ai/zh/document/pages-mcp', '_blank');
+});
+
+(function loadGoogleAnalytics() {
+  const GA_ID = 'G-MBR88GEWNE';
+
+  if (!GA_ID) {
+    console.warn('Google Analytics ID is not defined');
+    return;
+  }
+
+  function createAnalyticsScripts() {
+    const script1 = document.createElement('script');
+    script1.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+    script1.async = true;
+
+    const script2 = document.createElement('script');
+    script2.textContent =
+      'window.dataLayer = window.dataLayer || [];' +
+      'function gtag(){dataLayer.push(arguments);}' +
+      'gtag("js", new Date());' +
+      'gtag("config", "' +
+      GA_ID +
+      '");';
+
+    try {
+      document.head.appendChild(script1);
+      document.head.appendChild(script2);
+    } catch (err) {
+      console.error('Failed to load Google Analytics:', err);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', createAnalyticsScripts);
+  } else {
+    createAnalyticsScripts();
+  }
+})();
+
+
+</script>
+</body>
+</html>

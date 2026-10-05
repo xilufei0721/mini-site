@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>健身 & 饮食日记</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: { DEFAULT: '#6366f1', light: '#818cf8', dark: '#4f46e5' },
+            fitness: { DEFAULT: '#f97316', light: '#fb923c', dark: '#ea580c' },
+            diet: { DEFAULT: '#22c55e', light: '#4ade80', dark: '#16a34a' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #0f172a; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+    .card { background: #1e293b; border: 1px solid #334155; }
+    .card-inner { background: #0f172a; border: 1px solid #1e293b; }
+    .tab-active { background: linear-gradient(135deg, #6366f1, #818cf8); color: white; }
+    .tab-inactive { background: #1e293b; color: #94a3b8; }
+    .btn-primary { background: linear-gradient(135deg, #6366f1, #818cf8); }
+    .btn-fitness { background: linear-gradient(135deg, #f97316, #fb923c); }
+    .btn-diet { background: linear-gradient(135deg, #22c55e, #4ade80); }
+    .btn-danger { background: linear-gradient(135deg, #ef4444, #f87171); }
+    .input-style { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; }
+    .input-style:focus { outline: none; border-color: #6366f1; }
+    .input-style option { background: #1e293b; }
+    .progress-bar { background: #334155; border-radius: 999px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 999px; transition: width 0.5s ease; }
+    .tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .section-title { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: #64748b; font-weight: 700; }
+    .emoji-icon { font-size: 1.5rem; line-height: 1; }
+    select option { background-color: #1e293b; color: #e2e8f0; }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+    input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+  </style>
+</head>
+<body class="min-h-screen text-slate-100">
+
+<div id="app" class="max-w-2xl mx-auto px-4 py-6"></div>
+
+<script>
+// ===== 数据层 =====
+const DB = {
+  get(key, def = []) {
+    try { return JSON.parse(localStorage.getItem(key)) ?? def; } catch { return def; }
+  },
+  set(key, val) { localStorage.setItem(key, JSON.stringify(val)); },
+  getWorkouts() { return this.get('wc_workouts'); },
+  getMeals() { return this.get('wc_meals'); },
+  getGoals() { return this.get('wc_goals', { calories: 2000, protein: 150, water: 2000, workoutMins: 60 }); },
+  saveWorkout(w) { const arr = this.getWorkouts(); arr.push(w); this.set('wc_workouts', arr); },
+  saveMeal(m) { const arr = this.getMeals(); arr.push(m); this.set('wc_meals', arr); },
+  saveGoals(g) { this.set('wc_goals', g); },
+  deleteWorkout(id) { const arr = this.getWorkouts().filter(w => w.id !== id); this.set('wc_workouts', arr); },
+  deleteMeal(id) { const arr = this.getMeals().filter(m => m.id !== id); this.set('wc_meals', arr); },
+};
+
+// ===== 工具 =====
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
+const today = () => new Date().toISOString().slice(0, 10);
+const formatDate = d => {
+  const dt = new Date(d + 'T00:00:00');
+  return `${dt.getMonth()+1}月${dt.getDate()}日`;
+};
+const formatDateFull = d => {
+  const dt = new Date(d + 'T00:00:00');
+  const days = ['日','一','二','三','四','五','六'];
+  return `${dt.getFullYear()}年${dt.getMonth()+1}月${dt.getDate()}日 周${days[dt.getDay()]}`;
+};
+
+const WORKOUT_TYPES = [
+  { id: 'strength', label: '力量训练', icon: '🏋️', color: 'text-orange-400', bg: 'bg-orange-500/20', border: 'border-orange-500/30' },
+  { id: 'cardio', label: '有氧运动', icon: '🏃', color: 'text-pink-400', bg: 'bg-pink-500/20', border: 'border-pink-500/30' },
+  { id: 'hiit', label: 'HIIT', icon: '⚡', color: 'text-yellow-400', bg: 'bg-yellow-500/20', border: 'border-yellow-500/30' },
+  { id: 'yoga', label: '瑜伽/拉伸', icon: '🧘', color: 'text-purple-400', bg: 'bg-purple-500/20', border: 'border-purple-500/30' },
+  { id: 'swim', label: '游泳', icon: '🏊', color: 'text-cyan-400', bg: 'bg-cyan-500/20', border: 'border-cyan-500/30' },
+  { id: 'cycling', label: '骑行', icon: '🚴', color: 'text-green-400', bg: 'bg-green-500/20', border: 'border-green-500/30' },
+  { id: 'other', label: '其他', icon: '🎯', color: 'text-slate-400', bg: 'bg-slate-500/20', border: 'border-slate-500/30' },
+];
+
+const MEAL_TYPES = [
+  { id: 'breakfast', label: '早餐', icon: '🌅', color: 'text-amber-400' },
+  { id: 'lunch', label: '午餐', icon: '☀️', color: 'text-orange-400' },
+  { id: 'dinner', label: '晚餐', icon: '🌙', color: 'text-indigo-400' },
+  { id: 'snack', label: '加餐', icon: '🍎', color: 'text-green-400' },
+];
+
+// ===== 状态 =====
+let state = {
+  tab: 'overview',      // overview | workout | diet | history | goals
+  date: today(),
+  showWorkoutForm: false,
+  showMealForm: false,
+  showGoalsForm: false,
+  workoutForm: { type: 'strength', name: '', duration: '', sets: '', reps: '', weight: '', note: '', date: today() },
+  mealForm: { type: 'breakfast', name: '', calories: '', protein: '', carbs: '', fat: '', water: '', note: '', date: today() },
+  goalsForm: { ...DB.getGoals() },
+  historyDate: today(),
+};
+
+function setState(patch, rerender = true) {
+  Object.assign(state, typeof patch === 'function' ? patch(state) : patch);
+  if (rerender) render();
+}
+
+// ===== 计算辅助 =====
+function getDayData(date) {
+  const workouts = DB.getWorkouts().filter(w => w.date === date);
+  const meals = DB.getMeals().filter(m => m.date === date);
+  const totals = meals.reduce((acc, m) => ({
+    calories: acc.calories + (Number(m.calories) || 0),
+    protein: acc.protein + (Number(m.protein) || 0),
+    carbs: acc.carbs + (Number(m.carbs) || 0),
+    fat: acc.fat + (Number(m.fat) || 0),
+    water: acc.water + (Number(m.water) || 0),
+  }), { calories: 0, protein: 0, carbs: 0, fat: 0, water: 0 });
+  const workoutMins = workouts.reduce((a, w) => a + (Number(w.duration) || 0), 0);
+  return { workouts, meals, totals, workoutMins };
+}
+
+function getWeekStats() {
+  const result = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const date = d.toISOString().slice(0, 10);
+    const { totals, workoutMins } = getDayData(date);
+    result.push({ date, ...totals, workoutMins, label: `${d.getMonth()+1}/${d.getDate()}` });
+  }
+  return result;
+}
+
+// ===== 渲染函数 =====
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = renderApp();
+  bindEvents();
+}
+
+function renderApp() {
+  return `
+    ${renderHeader()}
+    ${renderTabs()}
+    <div class="fade-in mt-4">
+      ${state.tab === 'overview' ? renderOverview()
+      : state.tab === 'workout' ? renderWorkout()
+      : state.tab === 'diet' ? renderDiet()
+      : state.tab === 'history' ? renderHistory()
+      : renderGoals()}
+    </div>
+  `;
+}
+
+function renderHeader() {
+  return `
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">💪</span>
+          <h1 class="text-xl font-bold text-white">健身饮食日记</h1>
+        </div>
+        <p class="text-xs text-slate-500 mt-0.5">Want To Create · 记录每一天的努力</p>
+      </div>
+      <div class="text-right">
+        <div class="text-sm font-semibold text-slate-200">${formatDateFull(today())}</div>
+        <div class="text-xs text-slate-500 mt-0.5">WC Health Tracker</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderTabs() {
+  const tabs = [
+    { id: 'overview', label: '总览', icon: '📊' },
+    { id: 'workout', label: '健身', icon: '🏋️' },
+    { id: 'diet', label: '饮食', icon: '🥗' },
+    { id: 'history', label: '历史', icon: '📅' },
+    { id: 'goals', label: '目标', icon: '🎯' },
+  ];
+  return `
+    <div class="flex gap-2 overflow-x-auto pb-1">
+      ${tabs.map(t => `
+        <button data-tab="${t.id}" class="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${state.tab === t.id ? 'tab-active shadow-lg' : 'tab-inactive hover:bg-slate-700'}">
+          <span>${t.icon}</span><span>${t.label}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ===== 总览 =====
+function renderOverview() {
+  const { workouts, meals, totals, workoutMins } = getDayData(today());
+  const goals = DB.getGoals();
+  const week = getWeekStats();
+  const calPct = Math.min(100, Math.round((totals.calories / goals.calories) * 100));
+  const proteinPct = Math.min(100, Math.round((totals.protein / goals.protein) * 100));
+  const waterPct = Math.min(100, Math.round((totals.water / goals.water) * 100));
+  const workoutPct = Math.min(100, Math.round((workoutMins / goals.workoutMins) * 100));
+
+  const maxCal = Math.max(...week.map(d => d.calories), 1);
+  const maxMins = Math.max(...week.map(d => d.workoutMins), 1);
+
+  return `
+    <div class="space-y-4">
+      <!-- 今日快报 -->
+      <div class="card rounded-2xl p-4">
+        <div class="section-title mb-3">今日快报</div>
+        <div class="grid grid-cols-2 gap-3">
+          ${renderStatCard('🔥', '摄入热量', totals.calories + ' kcal', calPct, 'from-orange-500 to-red-500', goals.calories + ' kcal 目标')}
+          ${renderStatCard('⏱️', '运动时长', workoutMins + ' 分钟', workoutPct, 'from-indigo-500 to-purple-500', goals.workoutMins + ' 分钟目标')}
+          ${renderStatCard('🥩', '蛋白质', totals.protein + ' g', proteinPct, 'from-green-500 to-emerald-500', goals.protein + ' g 目标')}
+          ${renderStatCard('💧', '饮水量', totals.water + ' ml', waterPct, 'from-cyan-500 to-blue-500', goals.water + ' ml 目标')}
+        </div>
+      </div>
+
+      <!-- 今日运动 -->
+      <div class="card rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="section-title">今日运动</div>
+          <button data-action="go-workout" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold">+ 添加</button>
+        </div>
+        ${workouts.length === 0
+          ? `<p class="text-slate-500 text-sm text-center py-4">今天还没有运动记录 💤</p>`
+          : workouts.map(w => renderWorkoutItem(w, false)).join('')}
+      </div>
+
+      <!-- 今日饮食 -->
+      <div class="card rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="section-title">今日饮食</div>
+          <button data-action="go-diet" class="text-xs text-green-400 hover:text-green-300 font-semibold">+ 添加</button>
+        </div>
+        ${meals.length === 0
+          ? `<p class="text-slate-500 text-sm text-center py-4">今天还没有饮食记录 🍽️</p>`
+          : MEAL_TYPES.map(mt => {
+              const mts = meals.filter(m => m.type === mt.id);
+              if (!mts.length) return '';
+              return `
+                <div class="mb-3">
+                  <div class="text-xs font-semibold ${mt.color} mb-2">${mt.icon} ${mt.label}</div>
+                  ${mts.map(m => renderMealItem(m, false)).join('')}
+                </div>
+              `;
+            }).join('')}
+      </div>
+
+      <!-- 本周趋势 -->
+      <div class="card rounded-2xl p-4">
+        <div class="section-title mb-3">本周趋势</div>
+        <div class="mb-4">
+          <div class="text-xs text-slate-400 mb-2">热量摄入 (kcal)</div>
+          <div class="flex items-end gap-1.5 h-16">
+            ${week.map(d => {
+              const h = Math.max(4, Math.round((d.calories / maxCal) * 100));
+              const isToday = d.date === today();
+              return `
+                <div class="flex-1 flex flex-col items-center gap-1">
+                  <div class="w-full rounded-t-md ${isToday ? 'bg-gradient-to-t from-orange-500 to-red-400' : 'bg-slate-700'} transition-all" style="height:${h}%"></div>
+                  <span class="text-xs text-slate-500">${d.label}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        <div>
+          <div class="text-xs text-slate-400 mb-2">运动时长 (分钟)</div>
+          <div class="flex items-end gap-1.5 h-16">
+            ${week.map(d => {
+              const h = Math.max(4, maxMins > 0 ? Math.round((d.workoutMins / maxMins) * 100) : 4);
+              const isToday = d.date === today();
+              return `
+                <div class="flex-1 flex flex-col items-center gap-1">
+                  <div class="w-full rounded-t-md ${isToday ? 'bg-gradient-to-t from-indigo-500 to-purple-400' : 'bg-slate-700'} transition-all" style="height:${h}%"></div>
+                  <span class="text-xs text-slate-500">${d.label}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- 宏量营养素分布 -->
+      ${totals.calories > 0 ? renderMacroChart(totals) : ''}
+    </div>
+  `;
+}
+
+function renderStatCard(icon, label, value, pct, gradient, sub) {
+  return `
+    <div class="card-inner rounded-xl p-3">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-base">${icon}</span>
+        <span class="text-xs text-slate-400">${label}</span>
+      </div>
+      <div class="text-lg font-bold text-white mb-1">${value}</div>
+      <div class="progress-bar h-1.5 mb-1">
+        <div class="progress-fill bg-gradient-to-r ${gradient}" style="width:${pct}%"></div>
+      </div>
+      <div class="text-xs text-slate-500">${pct}% · ${sub}</div>
+    </div>
+  `;
+}
+
+function renderMacroChart(totals) {
+  const total = (totals.protein * 4 + totals.carbs * 4 + totals.fat * 9) || 1;
+  const pP = Math.round((totals.protein * 4 / total) * 100);
+  const pC = Math.round((totals.carbs * 4 / total) * 100);
+  const pF = Math.round((totals.fat * 9 / total) * 100);
+  return `
+    <div class="card rounded-2xl p-4">
+      <div class="section-title mb-3">宏量营养素分布</div>
+      <div class="space-y-2">
+        ${renderMacroBar('蛋白质', totals.protein, 'g', pP, 'from-green-500 to-emerald-400', 'text-green-400')}
+        ${renderMacroBar('碳水化合物', totals.carbs, 'g', pC, 'from-amber-500 to-yellow-400', 'text-amber-400')}
+        ${renderMacroBar('脂肪', totals.fat, 'g', pF, 'from-red-500 to-rose-400', 'text-red-400')}
+      </div>
+    </div>
+  `;
+}
+
+function renderMacroBar(label, val, unit, pct, gradient, color) {
+  return `
+    <div class="flex items-center gap-3">
+      <span class="text-xs text-slate-400 w-20 flex-shrink-0">${label}</span>
+      <div class="flex-1 progress-bar h-2">
+        <div class="progress-fill bg-gradient-to-r ${gradient}" style="width:${pct}%"></div>
+      </div>
+      <span class="text-xs font-semibold ${color} w-16 text-right">${val}${unit} · ${pct}%</span>
+    </div>
+  `;
+}
+
+// ===== 健身 =====
+function renderWorkout() {
+  const workouts = DB.getWorkouts().filter(w => w.date === today());
+  return `
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-base font-bold text-white">今日运动</div>
+          <div class="text-xs text-slate-400">${formatDate(today())} · 共 ${workouts.length} 条记录</div>
+        </div>
+        <button data-action="toggle-workout-form" class="btn-fitness px-4 py-2 rounded-xl text-sm font-semibold text-white shadow-lg shadow-orange-500/20 hover:opacity-90 transition-opacity">
+          ${state.showWorkoutForm ? '✕ 取消' : '+ 添加运动'}
+        </button>
+      </div>
+
+      ${state.showWorkoutForm ? renderWorkoutForm() : ''}
+
+      ${workouts.length === 0 && !state.showWorkoutForm
+        ? `<div class="card rounded-2xl p-8 text-center"><div class="text-4xl mb-3">🏋️</div><p class="text-slate-400">今天还没有运动记录</p><p class="text-slate-500 text-sm mt-1">点击上方按钮开始记录</p></div>`
+        : workouts.map(w => renderWorkoutItem(w, true)).join('')}
+    </div>
+  `;
+}
+
+function renderWorkoutForm() {
+  const f = state.workoutForm;
+  return `
+    <div class="card rounded-2xl p-4 fade-in border border-orange-500/20">
+      <div class="section-title mb-3">记录运动</div>
+      
+      <!-- 运动类型 -->
+      <div class="mb-4">
+        <label class="text-xs text-slate-400 block mb-2">运动类型</label>
+        <div class="grid grid-cols-4 gap-2">
+          ${WORKOUT_TYPES.map(t => `
+            <button data-action="set-workout-type" data-value="${t.id}" class="flex flex-col items-center gap-1 p-2 rounded-xl border transition-all ${f.type === t.id ? t.bg + ' ' + t.border + ' border ' + t.color : 'border-slate-700 text-slate-500 hover:border-slate-500'}">
+              <span class="text-xl">${t.icon}</span>
+              <span class="text-xs font-medium">${t.label}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">运动名称 *</label>
+          <input id="wf-name" type="text" placeholder="如：卧推、跑步..." value="${f.name}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">时长 (分钟)</label>
+          <input id="wf-duration" type="number" placeholder="30" value="${f.duration}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">组数</label>
+          <input id="wf-sets" type="number" placeholder="3" value="${f.sets}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">每组次数</label>
+          <input id="wf-reps" type="number" placeholder="12" value="${f.reps}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">重量 (kg)</label>
+          <input id="wf-weight" type="number" placeholder="60" value="${f.weight}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">日期</label>
+          <input id="wf-date" type="date" value="${f.date}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="text-xs text-slate-400 block mb-1">备注</label>
+        <input id="wf-note" type="text" placeholder="训练感受、注意事项..." value="${f.note}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <button data-action="save-workout" class="btn-fitness w-full py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity">
+        💾 保存运动记录
+      </button>
+    </div>
+  `;
+}
+
+function renderWorkoutItem(w, deletable) {
+  const type = WORKOUT_TYPES.find(t => t.id === w.type) || WORKOUT_TYPES[WORKOUT_TYPES.length - 1];
+  const details = [
+    w.duration && `⏱ ${w.duration}分钟`,
+    w.sets && w.reps && `${w.sets}组×${w.reps}次`,
+    w.weight && `${w.weight}kg`,
+  ].filter(Boolean);
+  return `
+    <div class="card-inner rounded-xl p-3 flex items-start gap-3 ${deletable ? 'fade-in' : ''} mb-2">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${type.bg}">
+        ${type.icon}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-sm text-white">${w.name || type.label}</span>
+          ${deletable ? `<button data-action="delete-workout" data-id="${w.id}" class="text-slate-600 hover:text-red-400 text-xs ml-2 transition-colors">✕</button>` : ''}
+        </div>
+        <div class="flex flex-wrap gap-2 mt-1">
+          <span class="tag ${type.bg} ${type.color} border ${type.border}">${type.label}</span>
+          ${details.map(d => `<span class="tag bg-slate-800 text-slate-300 border border-slate-700">${d}</span>`).join('')}
+        </div>
+        ${w.note ? `<p class="text-xs text-slate-500 mt-1">${w.note}</p>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// ===== 饮食 =====
+function renderDiet() {
+  const meals = DB.getMeals().filter(m => m.date === today());
+  const totals = meals.reduce((acc, m) => ({
+    calories: acc.calories + (Number(m.calories) || 0),
+    protein: acc.protein + (Number(m.protein) || 0),
+    carbs: acc.carbs + (Number(m.carbs) || 0),
+    fat: acc.fat + (Number(m.fat) || 0),
+    water: acc.water + (Number(m.water) || 0),
+  }), { calories: 0, protein: 0, carbs: 0, fat: 0, water: 0 });
+
+  return `
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-base font-bold text-white">今日饮食</div>
+          <div class="text-xs text-slate-400">${formatDate(today())} · ${totals.calories} kcal</div>
+        </div>
+        <button data-action="toggle-meal-form" class="btn-diet px-4 py-2 rounded-xl text-sm font-semibold text-white shadow-lg shadow-green-500/20 hover:opacity-90 transition-opacity">
+          ${state.showMealForm ? '✕ 取消' : '+ 添加饮食'}
+        </button>
+      </div>
+
+      ${state.showMealForm ? renderMealForm() : ''}
+
+      ${totals.calories > 0 ? `
+        <div class="card rounded-2xl p-4">
+          <div class="section-title mb-3">今日营养汇总</div>
+          <div class="grid grid-cols-4 gap-2 text-center">
+            ${[['🔥', '热量', totals.calories, 'kcal', 'text-orange-400'],
+               ['🥩', '蛋白质', totals.protein, 'g', 'text-green-400'],
+               ['🍚', '碳水', totals.carbs, 'g', 'text-amber-400'],
+               ['🫚', '脂肪', totals.fat, 'g', 'text-red-400']].map(([i,l,v,u,c]) => `
+              <div class="card-inner rounded-xl p-2">
+                <div class="text-lg">${i}</div>
+                <div class="text-xs text-slate-400 mt-0.5">${l}</div>
+                <div class="text-sm font-bold ${c} mt-0.5">${v}<span class="text-xs font-normal">${u}</span></div>
+              </div>
+            `).join('')}
+          </div>
+          ${totals.water > 0 ? `<div class="mt-2 card-inner rounded-xl p-2 flex items-center gap-2"><span>💧</span><span class="text-xs text-slate-400">饮水</span><span class="text-sm font-bold text-cyan-400 ml-auto">${totals.water} ml</span></div>` : ''}
+        </div>
+      ` : ''}
+
+      ${meals.length === 0 && !state.showMealForm
+        ? `<div class="card rounded-2xl p-8 text-center"><div class="text-4xl mb-3">🥗</div><p class="text-slate-400">今天还没有饮食记录</p><p class="text-slate-500 text-sm mt-1">点击上方按钮开始记录</p></div>`
+        : MEAL_TYPES.map(mt => {
+            const mts = meals.filter(m => m.type === mt.id);
+            if (!mts.length) return '';
+            const subTotal = mts.reduce((a, m) => a + (Number(m.calories) || 0), 0);
+            return `
+              <div class="card rounded-2xl p-4">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg">${mt.icon}</span>
+                    <span class="font-semibold text-sm ${mt.color}">${mt.label}</span>
+                  </div>
+                  <span class="text-xs text-slate-400">${subTotal} kcal</span>
+                </div>
+                ${mts.map(m => renderMealItem(m, true)).join('')}
+              </div>
+            `;
+          }).join('')}
+    </div>
+  `;
+}
+
+function renderMealForm() {
+  const f = state.mealForm;
+  return `
+    <div class="card rounded-2xl p-4 fade-in border border-green-500/20">
+      <div class="section-title mb-3">记录饮食</div>
+
+      <!-- 餐次类型 -->
+      <div class="mb-4">
+        <label class="text-xs text-slate-400 block mb-2">餐次</label>
+        <div class="grid grid-cols-4 gap-2">
+          ${MEAL_TYPES.map(t => `
+            <button data-action="set-meal-type" data-value="${t.id}" class="flex flex-col items-center gap-1 p-2 rounded-xl border transition-all ${f.type === t.id ? 'bg-green-500/20 border-green-500/40 ' + t.color : 'border-slate-700 text-slate-500 hover:border-slate-500'}">
+              <span class="text-xl">${t.icon}</span>
+              <span class="text-xs font-medium">${t.label}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div class="col-span-2">
+          <label class="text-xs text-slate-400 block mb-1">食物/餐食名称 *</label>
+          <input id="mf-name" type="text" placeholder="如：水煮鸡胸肉、麦片粥..." value="${f.name}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">热量 (kcal)</label>
+          <input id="mf-calories" type="number" placeholder="200" value="${f.calories}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">蛋白质 (g)</label>
+          <input id="mf-protein" type="number" placeholder="30" value="${f.protein}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">碳水化合物 (g)</label>
+          <input id="mf-carbs" type="number" placeholder="20" value="${f.carbs}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">脂肪 (g)</label>
+          <input id="mf-fat" type="number" placeholder="5" value="${f.fat}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">饮水量 (ml)</label>
+          <input id="mf-water" type="number" placeholder="250" value="${f.water}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-slate-400 block mb-1">日期</label>
+          <input id="mf-date" type="date" value="${f.date}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="text-xs text-slate-400 block mb-1">备注</label>
+        <input id="mf-note" type="text" placeholder="口感、来源..." value="${f.note}" class="input-style w-full rounded-lg px-3 py-2 text-sm" />
+      </div>
+      <button data-action="save-meal" class="btn-diet w-full py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity">
+        💾 保存饮食记录
+      </button>
+    </div>
+  `;
+}
+
+function renderMealItem(m, deletable) {
+  const type = MEAL_TYPES.find(t => t.id === m.type) || MEAL_TYPES[0];
+  const details = [
+    m.calories && `🔥 ${m.calories}kcal`,
+    m.protein && `🥩 ${m.protein}g`,
+    m.carbs && `🍚 ${m.carbs}g`,
+    m.fat && `🫚 ${m.fat}g`,
+  ].filter(Boolean);
+  return `
+    <div class="card-inner rounded-xl p-3 flex items-start gap-3 mb-2">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-sm text-white">${m.name || '未命名'}</span>
+          ${deletable ? `<button data-action="delete-meal" data-id="${m.id}" class="text-slate-600 hover:text-red-400 text-xs ml-2 transition-colors">✕</button>` : ''}
+        </div>
+        ${details.length ? `<div class="flex flex-wrap gap-1.5 mt-1.5">${details.map(d => `<span class="tag bg-slate-800 text-slate-300 border border-slate-700">${d}</span>`).join('')}</div>` : ''}
+        ${m.water ? `<div class="text-xs text-cyan-400 mt-1">💧 饮水 ${m.water}ml</div>` : ''}
+        ${m.note ? `<p class="text-xs text-slate-500 mt-1">${m.note}</p>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// ===== 历史 =====
+function renderHistory() {
+  const { workouts, meals, totals, workoutMins } = getDayData(state.historyDate);
+  const goals = DB.getGoals();
+
+  // 获取有记录的所有日期
+  const allDates = [...new Set([
+    ...DB.getWorkouts().map(w => w.date),
+    ...DB.getMeals().map(m => m.date),
+  ])].sort().reverse();
+
+  return `
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="text-base font-bold text-white">历史记录</div>
+        <input type="date" id="history-date" value="${state.historyDate}" class="input-style rounded-lg px-3 py-1.5 text-sm" />
+      </div>
+
+      <div class="card rounded-2xl p-4">
+        <div class="text-sm font-semibold text-slate-200 mb-3">${formatDateFull(state.historyDate)}</div>
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          ${renderStatCard('⏱️', '运动时长', workoutMins + ' 分钟', Math.min(100, Math.round(workoutMins / goals.workoutMins * 100)), 'from-indigo-500 to-purple-500', goals.workoutMins + ' 分钟目标')}
+          ${renderStatCard('🔥', '摄入热量', totals.calories + ' kcal', Math.min(100, Math.round(totals.calories / goals.calories * 100)), 'from-orange-500 to-red-500', goals.calories + ' kcal 目标')}
+        </div>
+
+        ${workouts.length > 0 ? `
+          <div class="section-title mb-2">运动记录</div>
+          ${workouts.map(w => renderWorkoutItem(w, false)).join('')}
+        ` : '<p class="text-slate-500 text-sm mb-3">当天无运动记录</p>'}
+
+        ${meals.length > 0 ? `
+          <div class="section-title mb-2 mt-3">饮食记录</div>
+          ${meals.map(m => renderMealItem(m, false)).join('')}
+        ` : '<p class="text-slate-500 text-sm">当天无饮食记录</p>'}
+
+        ${workouts.length === 0 && meals.length === 0 ? `
+          <div class="text-center py-6">
+            <div class="text-3xl mb-2">📭</div>
+            <p class="text-slate-400 text-sm">这天没有任何记录</p>
+          </div>
+        ` : ''}
+      </div>
+
+      ${allDates.length > 0 ? `
+        <div class="card rounded-2xl p-4">
+          <div class="section-title mb-3">有记录的日期</div>
+          <div class="flex flex-wrap gap-2">
+            ${allDates.slice(0, 30).map(d => `
+              <button data-action="select-history-date" data-value="${d}" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${d === state.historyDate ? 'bg-indigo-500/20 border border-indigo-500/40 text-indigo-400' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-500'}">
+                ${formatDate(d)}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+// ===== 目标 =====
+function renderGoals() {
+  const goals = DB.getGoals();
+  const g = state.goalsForm;
+  return `
+    <div class="space-y-4">
+      <div class="text-base font-bold text-white">健身目标设置</div>
+
+      <div class="card rounded-2xl p-4">
+        <div class="section-title mb-3">每日目标</div>
+        <div class="space-y-4">
+          ${[
+            { id: 'calories', icon: '🔥', label: '热量目标', unit: 'kcal', placeholder: '2000', color: 'text-orange-400' },
+            { id: 'protein', icon: '🥩', label: '蛋白质目标', unit: 'g', placeholder: '150', color: 'text-green-400' },
+            { id: 'water', icon: '💧', label: '饮水目标', unit: 'ml', placeholder: '2000', color: 'text-cyan-400' },
+            { id: 'workoutMins', icon: '⏱️', label: '运动时长目标', unit: '分钟', placeholder: '60', color: 'text-indigo-400' },
+          ].map(item => `
+            <div>
+              <label class="flex items-center gap-2 text-sm font-medium text-slate-300 mb-1.5">
+                <span>${item.icon}</span><span>${item.label}</span>
+                <span class="ml-auto text-xs ${item.color}">当前: ${goals[item.id]} ${item.unit}</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <input id="goal-${item.id}" type="number" value="${g[item.id]}" placeholder="${item.placeholder}"
+                  class="input-style flex-1 rounded-lg px-3 py-2 text-sm" />
+                <span class="text-xs text-slate-500 w-10">${item.unit}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <button data-action="save-goals" class="btn-primary w-full mt-4 py-2.5 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity">
+          🎯 保存目标
+        </button>
+      </div>
+
+      <div class="card rounded-2xl p-4">
+        <div class="section-title mb-3">数据管理</div>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between card-inner rounded-xl p-3">
+            <div>
+              <div class="text-sm font-medium text-white">运动记录</div>
+              <div class="text-xs text-slate-400">${DB.getWorkouts().length} 条记录</div>
+            </div>
+            <button data-action="export-data" class="px-3 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 text-xs font-semibold hover:bg-indigo-500/30 transition-colors">导出</button>
+          </div>
+          <div class="flex items-center justify-between card-inner rounded-xl p-3">
+            <div>
+              <div class="text-sm font-medium text-white">饮食记录</div>
+              <div class="text-xs text-slate-400">${DB.getMeals().length} 条记录</div>
+            </div>
+            <button data-action="export-data" class="px-3 py-1.5 rounded-lg bg-green-500/20 border border-green-500/30 text-green-400 text-xs font-semibold hover:bg-green-500/30 transition-colors">导出</button>
+          </div>
+        </div>
+        <div class="mt-3 p-3 bg-slate-900/50 rounded-xl border border-slate-700">
+          <p class="text-xs text-slate-400">📦 数据存储在浏览器本地（localStorage），清除浏览器数据会导致记录丢失。建议定期导出备份。</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ===== 事件绑定 =====
+function bindEvents() {
+  document.querySelectorAll('[data-tab]').forEach(el => {
+    el.addEventListener('click', () => setState({ tab: el.dataset.tab }));
+  });
+
+  document.querySelectorAll('[data-action]').forEach(el => {
+    el.addEventListener('click', () => handleAction(el.dataset.action, el.dataset));
+  });
+
+  const histDate = document.getElementById('history-date');
+  if (histDate) {
+    histDate.addEventListener('change', e => setState({ historyDate: e.target.value }));
+  }
+
+  // 实时同步表单数据
+  const wfFields = ['name', 'duration', 'sets', 'reps', 'weight', 'note', 'date'];
+  wfFields.forEach(f => {
+    const el = document.getElementById('wf-' + f);
+    if (el) el.addEventListener('input', e => {
+      state.workoutForm[f] = e.target.value;
+    });
+  });
+
+  const mfFields = ['name', 'calories', 'protein', 'carbs', 'fat', 'water', 'note', 'date'];
+  mfFields.forEach(f => {
+    const el = document.getElementById('mf-' + f);
+    if (el) el.addEventListener('input', e => {
+      state.mealForm[f] = e.target.value;
+    });
+  });
+
+  const goalFields = ['calories', 'protein', 'water', 'workoutMins'];
+  goalFields.forEach(f => {
+    const el = document.getElementById('goal-' + f);
+    if (el) el.addEventListener('input', e => {
+      state.goalsForm[f] = Number(e.target.value);
+    });
+  });
+}
+
+function handleAction(action, dataset) {
+  switch (action) {
+    case 'go-workout':
+      setState({ tab: 'workout', showWorkoutForm: true });
+      break;
+    case 'go-diet':
+      setState({ tab: 'diet', showMealForm: true });
+      break;
+    case 'toggle-workout-form':
+      setState(s => ({ showWorkoutForm: !s.showWorkoutForm }));
+      break;
+    case 'toggle-meal-form':
+      setState(s => ({ showMealForm: !s.showMealForm }));
+      break;
+    case 'set-workout-type':
+      state.workoutForm.type = dataset.value;
+      setState({});
+      break;
+    case 'set-meal-type':
+      state.mealForm.type = dataset.value;
+      setState({});
+      break;
+    case 'save-workout': {
+      // 从 DOM 读取最新值
+      const name = document.getElementById('wf-name')?.value?.trim();
+      if (!name) { alert('请填写运动名称'); return; }
+      const w = {
+        id: uid(),
+        type: state.workoutForm.type,
+        name,
+        duration: document.getElementById('wf-duration')?.value || '',
+        sets: document.getElementById('wf-sets')?.value || '',
+        reps: document.getElementById('wf-reps')?.value || '',
+        weight: document.getElementById('wf-weight')?.value || '',
+        note: document.getElementById('wf-note')?.value || '',
+        date: document.getElementById('wf-date')?.value || today(),
+      };
+      DB.saveWorkout(w);
+      setState({
+        showWorkoutForm: false,
+        workoutForm: { type: 'strength', name: '', duration: '', sets: '', reps: '', weight: '', note: '', date: today() }
+      });
+      break;
+    }
+    case 'save-meal': {
+      const name = document.getElementById('mf-name')?.value?.trim();
+      if (!name) { alert('请填写食物名称'); return; }
+      const m = {
+        id: uid(),
+        type: state.mealForm.type,
+        name,
+        calories: document.getElementById('mf-calories')?.value || '',
+        protein: document.getElementById('mf-protein')?.value || '',
+        carbs: document.getElementById('mf-carbs')?.value || '',
+        fat: document.getElementById('mf-fat')?.value || '',
+        water: document.getElementById('mf-water')?.value || '',
+        note: document.getElementById('mf-note')?.value || '',
+        date: document.getElementById('mf-date')?.value || today(),
+      };
+      DB.saveMeal(m);
+      setState({
+        showMealForm: false,
+        mealForm: { type: 'breakfast', name: '', calories: '', protein: '', carbs: '', fat: '', fat: '', water: '', note: '', date: today() }
+      });
+      break;
+    }
+    case 'delete-workout':
+      if (confirm('确认删除这条运动记录？')) {
+        DB.deleteWorkout(dataset.id);
+        render();
+      }
+      break;
+    case 'delete-meal':
+      if (confirm('确认删除这条饮食记录？')) {
+        DB.deleteMeal(dataset.id);
+        render();
+      }
+      break;
+    case 'select-history-date':
+      setState({ historyDate: dataset.value });
+      break;
+    case 'save-goals': {
+      const goals = {
+        calories: Number(document.getElementById('goal-calories')?.value) || 2000,
+        protein: Number(document.getElementById('goal-protein')?.value) || 150,
+        water: Number(document.getElementById('goal-water')?.value) || 2000,
+        workoutMins: Number(document.getElementById('goal-workoutMins')?.value) || 60,
+      };
+      DB.saveGoals(goals);
+      setState({ goalsForm: { ...goals } });
+      // 显示成功提示
+      const btn = document.querySelector('[data-action="save-goals"]');
+      if (btn) { btn.textContent = '✅ 已保存！'; setTimeout(() => render(), 1000); }
+      break;
+    }
+    case 'export-data': {
+      const data = {
+        workouts: DB.getWorkouts(),
+        meals: DB.getMeals(),
+        goals: DB.getGoals(),
+        exportedAt: new Date().toISOString(),
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fitness-data-${today()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      break;
+    }
+  }
+}
+
+// ===== 初始化 =====
+render();
+</script>
+</body>
+</html>
